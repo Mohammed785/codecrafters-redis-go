@@ -7,7 +7,18 @@ import (
 )
 
 func handleConnection(conn net.Conn) {
-	conn.Write([]byte("+PONG\r\n"))
+	data := make([]byte, 2048)
+	tmp := make([]byte,512)
+	for {
+		n,_:=conn.Read(tmp)
+		if n == 0{
+			break
+		}
+		data = append(data, tmp[:n]...)
+		conn.Write([]byte("+PONG\r\n"))
+		fmt.Println("HI")
+		
+	}
 }
 
 func main() {
