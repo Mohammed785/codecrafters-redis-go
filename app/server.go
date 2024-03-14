@@ -7,9 +7,10 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
+	"github.com/codecrafters-io/redis-starter-go/app/storage"
 )
 
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn,db *storage.Storage) {
 	parser := new(resp.RESPParser)
 	defer conn.Close()
 	data := make([]byte, 1024)
@@ -36,7 +37,7 @@ func handleConnection(conn net.Conn) {
 				conn.Write(resp.SimpleError([]byte(err.Error())).Serialize())
 				continue
 			}
-			cmd.Execute(conn)
+			cmd.Execute(conn,db)
 		default:
 			conn.Write([]byte("-invalid message\r\n")) // for now
 
@@ -50,12 +51,14 @@ func main() {
 	if err != nil {
 		log.Fatalln("Failed to bind to port 6379")
 	}
+	defer l.Close()
+	db:=storage.NewStorage()
 	for {
 		conn, err := l.Accept()
 		if err != nil {
 			log.Println("Error accepting connection: ", err.Error())
 			continue
 		}
-		go handleConnection(conn)
+		go handleConnection(conn,db)
 	}
 }

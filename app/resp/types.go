@@ -64,6 +64,9 @@ func (i Integer) Serialize() []byte {
 }
 
 func (bs BulkString) Serialize() []byte {
+	if len(bs)==0{
+		return bs.SerializeNull()
+	}
 	return bytes.Join([][]byte{[]byte(fmt.Sprintf("%c%v", BULK, len(bs))), append(bs, CRLF...)}, []byte("\r\n"))
 }
 
