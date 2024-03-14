@@ -95,6 +95,7 @@ func (c *Command) Execute(conn net.Conn, db *storage.Storage) {
 		value, ok := db.Get(c.Options[0])
 		if !ok {
 			conn.Write([]byte("$-1\r\n"))
+			return
 		}
 		conn.Write(resp.BulkString([]byte(value)).Serialize())
 	case "set":
