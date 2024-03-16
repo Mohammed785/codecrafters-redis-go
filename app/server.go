@@ -55,14 +55,14 @@ func handleConnection(conn net.Conn, app *config.App) {
 
 func main() {
 	app := &config.App{
-		Params: config.Params{Master: true},
+		Params: config.Params{Role: "master",MasterReplOffset: 0,MasterReplId: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"},
 	}
 	var replicaof string
 	flag.IntVar(&app.Params.Port, "port", 6379, "tcp server port number")
 	flag.StringVar(&replicaof, "replicaof", "", "run the instance in slave mode")
 	flag.Parse()
 	if replicaof != "" {
-		app.Params.Master = false
+		app.Params.Role = "slave"
 		app.Params.MasterHost = replicaof
 		port, err := strconv.Atoi(flag.Arg(0))
 		if err != nil {

@@ -106,11 +106,7 @@ func (c *Command) Execute(conn net.Conn, app *config.App) {
 		res := app.DB.Set(c.Options[0], c.Options[1], c.Args)
 		conn.Write(res)
 	case "info":
-		if app.Params.Master {
-			conn.Write(resp.BulkString([]byte("# Replication\nrole:master")).Serialize())
-		}else{
-			conn.Write(resp.BulkString([]byte("# Replication\nrole:slave")).Serialize())
-		}
+		conn.Write(resp.BulkString([]byte(app.Params.Replication())).Serialize())
 	}
 
 }
