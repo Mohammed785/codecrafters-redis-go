@@ -109,6 +109,8 @@ func (c *Command) Execute(conn net.Conn, app *config.App) {
 		conn.Write(resp.BulkString([]byte(app.Params.Replication())).Serialize())
 	case "replconf":
 		conn.Write(resp.SimpleString([]byte("OK")).Serialize())
+	case "psync":
+		conn.Write(resp.SimpleString([]byte(fmt.Sprintf("FULLRESYNC %s 0",app.Params.MasterReplId))).Serialize())
 	}
 
 }
