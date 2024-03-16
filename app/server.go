@@ -18,8 +18,7 @@ func handleConnection(conn net.Conn, db *storage.Storage) {
 	for {
 		n, err := conn.Read(data)
 		if err != nil {
-			fmt.Println("Error reading from connection ", err.Error())
-			return
+			log.Fatalln("Error reading from connection ", err.Error())
 		}
 		data = data[:n]
 		parser.SetStream(data)

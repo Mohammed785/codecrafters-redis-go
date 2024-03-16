@@ -69,13 +69,17 @@ func NewCommandFromArray(arr resp.RespArray) (*Command, error) {
 		for _, pairs := range SET_OPTIONAL {
 			exists := 0
 			for i := range pairs {
-				if exists>1 {
+				if exists > 1 {
 					return nil, fmt.Errorf("Err syntax error")
 				}
 				if _, ok := cmd.Args[pairs[i]]; ok {
 					exists++
 				}
 			}
+		}
+	case "info":
+		for _, section := range arr {
+			cmd.Options = append(cmd.Options, section.String())
 		}
 	}
 	return cmd, nil
@@ -101,5 +105,8 @@ func (c *Command) Execute(conn net.Conn, db *storage.Storage) {
 	case "set":
 		res := db.Set(c.Options[0], c.Options[1], c.Args)
 		conn.Write(res)
+	case "info":
+		conn.Write(resp.BulkString([]byte("role:master")).Serialize())
 	}
+
 }
