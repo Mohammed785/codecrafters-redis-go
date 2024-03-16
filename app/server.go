@@ -21,9 +21,9 @@ func handleConnection(conn net.Conn, app *config.App) {
 	for {
 		n, err := conn.Read(data)
 		if err != nil {
-			if err==io.EOF{
-				log.Printf("connection %v closed",conn.RemoteAddr())
-			}else{
+			if err == io.EOF {
+				log.Printf("connection %v closed", conn.RemoteAddr())
+			} else {
 				log.Println("Error reading from connection ", err.Error())
 			}
 			return
@@ -52,10 +52,18 @@ func handleConnection(conn net.Conn, app *config.App) {
 		}
 	}
 }
+func SendHandshake(app *config.App) {
+	address := fmt.Sprintf("%s:%d", app.Params.MasterHost, app.Params.MasterPort)
+	m, err := net.Dial("tcp", address)
+	if err != nil {
+		log.Fatalln("couldn't connect to master at ", address)
+	}
+	m.Write([]byte("*1\r\n$4\r\nping\r\n"))
+}
 
 func main() {
 	app := &config.App{
-		Params: config.Params{Role: "master",MasterReplOffset: 0,MasterReplId: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"},
+		Params: config.Params{Role: "master", MasterReplOffset: 0, MasterReplId: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"},
 	}
 	var replicaof string
 	flag.IntVar(&app.Params.Port, "port", 6379, "tcp server port number")
@@ -69,6 +77,7 @@ func main() {
 			log.Fatalln("invalid master port")
 		}
 		app.Params.MasterPort = port
+		SendHandshake(app)
 	}
 
 	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%v", app.Params.Port))
