@@ -81,3 +81,13 @@ func (a RespArray) Serialize() []byte {
 	}
 	return b
 }
+
+
+func ConstructRespArray(options []string)string{
+	arr := fmt.Sprintf("*%d\r\n",len(options))
+	for _, v := range options {
+		arr += fmt.Sprintf("$%d\r\n%s\r\n",len(v),v)
+	}
+	return arr
+
+}

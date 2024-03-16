@@ -7,12 +7,12 @@ import (
 )
 
 type Params struct {
-	Port             int
+	Port             string
 	Role             string
 	MasterReplId     string
 	MasterReplOffset int
 	MasterHost       string
-	MasterPort       int
+	MasterPort       string
 }
 
 func (p Params) Replication() string {

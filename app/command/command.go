@@ -107,6 +107,8 @@ func (c *Command) Execute(conn net.Conn, app *config.App) {
 		conn.Write(res)
 	case "info":
 		conn.Write(resp.BulkString([]byte(app.Params.Replication())).Serialize())
+	case "replconf":
+		conn.Write(resp.SimpleString([]byte("OK")).Serialize())
 	}
 
 }

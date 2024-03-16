@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"strconv"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/config"
@@ -17,7 +16,7 @@ import (
 func handleConnection(conn net.Conn, app *config.App) {
 	parser := new(resp.RESPParser)
 	defer conn.Close()
-	data := make([]byte, 1024)
+	data := make([]byte, 2048)
 	for {
 		n, err := conn.Read(data)
 		if err != nil {
@@ -28,8 +27,7 @@ func handleConnection(conn net.Conn, app *config.App) {
 			}
 			return
 		}
-		data = data[:n]
-		parser.SetStream(data)
+		parser.SetStream(data[:n])
 		parsed, err := parser.Parse()
 		if err != nil {
 			conn.Write([]byte(fmt.Sprintf("-%v\r\n", err.Error())))
@@ -53,15 +51,15 @@ func handleConnection(conn net.Conn, app *config.App) {
 	}
 }
 func SendHandshake(app *config.App) {
-	address := fmt.Sprintf("%s:%d", app.Params.MasterHost, app.Params.MasterPort)
+	address := fmt.Sprintf("%s:%s", app.Params.MasterHost, app.Params.MasterPort)
 	m, err := net.Dial("tcp", address)
 	if err != nil {
 		log.Fatalln("couldn't connect to master at ", address)
 	}
-	m.Write([]byte("*1\r\n$4\r\nping\r\n"))
-	m.Write([]byte(fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n%d\r\n",app.Params.Port)))
-	m.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n"))
-	m.Write([]byte("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"))
+	m.Write([]byte(resp.ConstructRespArray([]string{"ping"})))
+	m.Write([]byte(resp.ConstructRespArray([]string{"REPLCONF","listening-port",app.Params.Port})))
+	m.Write([]byte(resp.ConstructRespArray([]string{"REPLCONF","capa","psync2"})))
+	m.Write([]byte(resp.ConstructRespArray([]string{"PSYNC","?","-1"})))
 }
 
 func main() {
@@ -69,17 +67,13 @@ func main() {
 		Params: config.Params{Role: "master", MasterReplOffset: 0, MasterReplId: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"},
 	}
 	var replicaof string
-	flag.IntVar(&app.Params.Port, "port", 6379, "tcp server port number")
+	flag.StringVar(&app.Params.Port, "port", "6379", "tcp server port number")
 	flag.StringVar(&replicaof, "replicaof", "", "run the instance in slave mode")
 	flag.Parse()
 	if replicaof != "" {
 		app.Params.Role = "slave"
 		app.Params.MasterHost = replicaof
-		port, err := strconv.Atoi(flag.Arg(0))
-		if err != nil {
-			log.Fatalln("invalid master port")
-		}
-		app.Params.MasterPort = port
+		app.Params.MasterPort = flag.Arg(0)
 		SendHandshake(app)
 	}
 

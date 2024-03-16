@@ -27,7 +27,7 @@ func (s *Storage) Get(key string) (string, bool) {
 	if !ok {
 		return "", ok
 	}
-	if !value.exp.IsZero() && value.exp.UnixMilli() < time.Now().UnixMilli() {
+	if !value.exp.IsZero() && time.Now().After(value.exp) {
 		delete(s.db, key)
 		return "", false
 	}
@@ -58,9 +58,9 @@ func (s *Storage) Set(key, val string, args map[string]string) []byte {
 	}
 	s.db[key] = newValue
 	if returnOld {
-		if !oldExists{
+		if !oldExists {
 			return []byte("$-1\r\n")
-		}else{
+		} else {
 			return resp.BulkString([]byte(oldValue.value)).Serialize()
 		}
 	}
