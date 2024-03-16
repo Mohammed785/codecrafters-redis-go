@@ -33,17 +33,17 @@ func NewCommandFromArray(arr resp.RespArray) (*Command, error) {
 		}
 	case "echo":
 		if len(arr) != 2 {
-			return nil, fmt.Errorf("echo command needs a message")
+			return nil, fmt.Errorf("ERR wrong number of arguments for 'echo' command")
 		}
 		cmd.Options = append(cmd.Options, arr[1].String())
 	case "get":
 		if len(arr) != 2 {
-			return nil, fmt.Errorf("please provide only the key")
+			return nil, fmt.Errorf("ERR wrong number of arguments for 'get' command")
 		}
 		cmd.Options = append(cmd.Options, arr[1].String())
 	case "set":
 		if len(arr) < 3 {
-			return nil, fmt.Errorf("please provide key and value")
+			return nil, fmt.Errorf("ERR wrong number of arguments for 'set' command")
 		}
 		cmd.Options = append(cmd.Options, arr[1].String(), arr[2].String())
 		cmd.Args = make(map[string]string)
@@ -55,12 +55,12 @@ func NewCommandFromArray(arr resp.RespArray) (*Command, error) {
 				i++
 			} else {
 				if i+1 >= len(arr) {
-					return nil, fmt.Errorf("set '%v' flag needs a value", argLower)
+					return nil, fmt.Errorf("ERR syntax error")
 				}
 				val := arr[i+1].String()
 				_, err := strconv.ParseInt(val, 10, 64)
 				if err != nil {
-					return nil, fmt.Errorf("invalid value '%s' for '%s'", val, argLower)
+					return nil, fmt.Errorf("ERR value is not an integer or out of range")
 				}
 				cmd.Args[argLower] = arr[i+1].String()
 				i += 2
@@ -70,7 +70,7 @@ func NewCommandFromArray(arr resp.RespArray) (*Command, error) {
 			exists := 0
 			for i := range pairs {
 				if exists>1 {
-					return nil, fmt.Errorf("you can only set one flag from %v", pairs)
+					return nil, fmt.Errorf("Err syntax error")
 				}
 				if _, ok := cmd.Args[pairs[i]]; ok {
 					exists++

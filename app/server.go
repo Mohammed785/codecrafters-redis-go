@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -10,7 +11,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/storage"
 )
 
-func handleConnection(conn net.Conn,db *storage.Storage) {
+func handleConnection(conn net.Conn, db *storage.Storage) {
 	parser := new(resp.RESPParser)
 	defer conn.Close()
 	data := make([]byte, 1024)
@@ -20,7 +21,7 @@ func handleConnection(conn net.Conn,db *storage.Storage) {
 			fmt.Println("Error reading from connection ", err.Error())
 			return
 		}
-		data=data[:n]
+		data = data[:n]
 		parser.SetStream(data)
 		parsed, err := parser.Parse()
 		if err != nil {
@@ -32,12 +33,12 @@ func handleConnection(conn net.Conn,db *storage.Storage) {
 			if len(parsed) == 0 {
 				continue
 			}
-			cmd,err:=command.NewCommandFromArray(parsed)
-			if err!=nil{
+			cmd, err := command.NewCommandFromArray(parsed)
+			if err != nil {
 				conn.Write(resp.SimpleError([]byte(err.Error())).Serialize())
 				continue
 			}
-			cmd.Execute(conn,db)
+			cmd.Execute(conn, db)
 		default:
 			conn.Write([]byte("-invalid message\r\n")) // for now
 
@@ -46,19 +47,21 @@ func handleConnection(conn net.Conn,db *storage.Storage) {
 }
 
 func main() {
-	fmt.Println("Logs from your program will appear here!")
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
+	var port int
+	flag.IntVar(&port, "port", 6379, "tcp server port number")
+	flag.Parse()
+	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%v",port))
 	if err != nil {
-		log.Fatalln("Failed to bind to port 6379")
+		log.Fatalln("Failed to bind to port ",port)
 	}
 	defer l.Close()
-	db:=storage.NewStorage()
+	db := storage.NewStorage()
 	for {
 		conn, err := l.Accept()
 		if err != nil {
 			log.Println("Error accepting connection: ", err.Error())
 			continue
 		}
-		go handleConnection(conn,db)
+		go handleConnection(conn, db)
 	}
 }
