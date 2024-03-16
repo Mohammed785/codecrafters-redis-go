@@ -3,22 +3,30 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
+	"strconv"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
+	"github.com/codecrafters-io/redis-starter-go/app/config"
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/storage"
 )
 
-func handleConnection(conn net.Conn, db *storage.Storage) {
+func handleConnection(conn net.Conn, app *config.App) {
 	parser := new(resp.RESPParser)
 	defer conn.Close()
 	data := make([]byte, 1024)
 	for {
 		n, err := conn.Read(data)
 		if err != nil {
-			log.Fatalln("Error reading from connection ", err.Error())
+			if err==io.EOF{
+				log.Printf("connection %v closed",conn.RemoteAddr())
+			}else{
+				log.Println("Error reading from connection ", err.Error())
+			}
+			return
 		}
 		data = data[:n]
 		parser.SetStream(data)
@@ -37,7 +45,7 @@ func handleConnection(conn net.Conn, db *storage.Storage) {
 				conn.Write(resp.SimpleError([]byte(err.Error())).Serialize())
 				continue
 			}
-			cmd.Execute(conn, db)
+			cmd.Execute(conn, app)
 		default:
 			conn.Write([]byte("-invalid message\r\n")) // for now
 
@@ -46,21 +54,35 @@ func handleConnection(conn net.Conn, db *storage.Storage) {
 }
 
 func main() {
-	var port int
-	flag.IntVar(&port, "port", 6379, "tcp server port number")
+	app := &config.App{
+		Params: config.Params{Master: true},
+	}
+	var replicaof string
+	flag.IntVar(&app.Params.Port, "port", 6379, "tcp server port number")
+	flag.StringVar(&replicaof, "replicaof", "", "run the instance in slave mode")
 	flag.Parse()
-	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%v",port))
+	if replicaof != "" {
+		app.Params.Master = false
+		app.Params.MasterHost = replicaof
+		port, err := strconv.Atoi(flag.Arg(0))
+		if err != nil {
+			log.Fatalln("invalid master port")
+		}
+		app.Params.MasterPort = port
+	}
+
+	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%v", app.Params.Port))
 	if err != nil {
-		log.Fatalln("Failed to bind to port ",port)
+		log.Fatalln("Failed to bind to port ", app.Params.Port)
 	}
 	defer l.Close()
-	db := storage.NewStorage()
+	app.DB = storage.NewStorage()
 	for {
 		conn, err := l.Accept()
 		if err != nil {
 			log.Println("Error accepting connection: ", err.Error())
 			continue
 		}
-		go handleConnection(conn, db)
+		go handleConnection(conn, app)
 	}
 }

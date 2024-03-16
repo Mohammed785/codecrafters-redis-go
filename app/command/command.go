@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/codecrafters-io/redis-starter-go/app/config"
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/storage"
 )
 
 type Command struct {
@@ -85,7 +85,7 @@ func NewCommandFromArray(arr resp.RespArray) (*Command, error) {
 	return cmd, nil
 }
 
-func (c *Command) Execute(conn net.Conn, db *storage.Storage) {
+func (c *Command) Execute(conn net.Conn, app *config.App) {
 	switch c.Name {
 	case "ping":
 		if len(c.Options) == 0 {
@@ -96,17 +96,21 @@ func (c *Command) Execute(conn net.Conn, db *storage.Storage) {
 	case "echo":
 		conn.Write(resp.BulkString([]byte(c.Options[0])).Serialize())
 	case "get":
-		value, ok := db.Get(c.Options[0])
+		value, ok := app.DB.Get(c.Options[0])
 		if !ok {
 			conn.Write([]byte("$-1\r\n"))
 			return
 		}
 		conn.Write(resp.BulkString([]byte(value)).Serialize())
 	case "set":
-		res := db.Set(c.Options[0], c.Options[1], c.Args)
+		res := app.DB.Set(c.Options[0], c.Options[1], c.Args)
 		conn.Write(res)
 	case "info":
-		conn.Write(resp.BulkString([]byte("role:master")).Serialize())
+		if app.Params.Master {
+			conn.Write(resp.BulkString([]byte("# Replication\nrole:master")).Serialize())
+		}else{
+			conn.Write(resp.BulkString([]byte("# Replication\nrole:slave")).Serialize())
+		}
 	}
 
 }
