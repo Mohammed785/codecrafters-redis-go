@@ -47,7 +47,7 @@ func (bs BulkString) SerializeNull()[]byte{
 }
 
 func (a RespArray) Serialize() []byte {
-	b := append([]byte{}, []byte(fmt.Sprintf("%c%v\r\n", ARRAY, len(a)))...)
+	b := []byte(fmt.Sprintf("%c%v\r\n", ARRAY, len(a)))
 	for i := range a {
 		b = append(b, a[i].Serialize()...)
 	}

@@ -36,12 +36,12 @@ func handleConnection(conn net.Conn, app *config.App) {
 		if len(parsed) == 0 {
 			continue
 		}
-		cmd, err := command.NewCommandFromArray(parsed)
+		cmd, err := command.NewCommandFromArray(parsed,conn,app)
 		if err != nil {
 			conn.Write(resp.SimpleError(err.Error()).Serialize())
 			continue
 		}
-		cmd.Execute(conn, app)
+		cmd.Execute()
 	}
 }
 func SendHandshake(app *config.App) {
