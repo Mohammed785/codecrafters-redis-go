@@ -30,24 +30,18 @@ func handleConnection(conn net.Conn, app *config.App) {
 		parser.SetStream(data[:n])
 		parsed, err := parser.Parse()
 		if err != nil {
-			conn.Write([]byte(fmt.Sprintf("-%v\r\n", err.Error())))
+			conn.Write(resp.SimpleError(err.Error()).Serialize())
 			continue
 		}
-		switch parsed := parsed.(type) {
-		case resp.RespArray:
-			if len(parsed) == 0 {
-				continue
-			}
-			cmd, err := command.NewCommandFromArray(parsed)
-			if err != nil {
-				conn.Write(resp.SimpleError([]byte(err.Error())).Serialize())
-				continue
-			}
-			cmd.Execute(conn, app)
-		default:
-			conn.Write([]byte("-invalid message\r\n")) // for now
-
+		if len(parsed) == 0 {
+			continue
 		}
+		cmd, err := command.NewCommandFromArray(parsed)
+		if err != nil {
+			conn.Write(resp.SimpleError(err.Error()).Serialize())
+			continue
+		}
+		cmd.Execute(conn, app)
 	}
 }
 func SendHandshake(app *config.App) {
@@ -56,10 +50,10 @@ func SendHandshake(app *config.App) {
 	if err != nil {
 		log.Fatalln("couldn't connect to master at ", address)
 	}
-	m.Write([]byte(resp.ConstructRespArray([]string{"ping"})))
-	m.Write([]byte(resp.ConstructRespArray([]string{"REPLCONF","listening-port",app.Params.Port})))
-	m.Write([]byte(resp.ConstructRespArray([]string{"REPLCONF","capa","psync2"})))
-	m.Write([]byte(resp.ConstructRespArray([]string{"PSYNC","?","-1"})))
+	m.Write(resp.ConstructRespArray([]string{"ping"}))
+	m.Write(resp.ConstructRespArray([]string{"REPLCONF","listening-port",app.Params.Port}))
+	m.Write(resp.ConstructRespArray([]string{"REPLCONF","capa","psync2"}))
+	m.Write(resp.ConstructRespArray([]string{"PSYNC","?","-1"}))
 }
 
 func main() {

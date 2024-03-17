@@ -1,7 +1,6 @@
 package resp
 
 import (
-	"bytes"
 	"fmt"
 )
 
@@ -17,57 +16,30 @@ var CRLF = []byte("\r\n")
 
 type RESPItem interface {
 	Serialize() []byte
-	String() string
 }
 
-type SimpleString []byte
-type BulkString []byte
-type SimpleError []byte
-type Integer []byte
+type SimpleString string
+type BulkString string
+type SimpleError string
+type Integer string
 type RespArray []RESPItem
 
-func (ss SimpleString) String() string {
-	return string(ss)
-}
-
-func (se SimpleError) String() string {
-	return string(se)
-
-}
-func (i Integer) String() string {
-	return string(i)
-}
-
-func (bs BulkString) String() string {
-	return string(bs)
-}
-
-func (a RespArray) String() string {
-	b := "{"
-	for i := range a {
-		b += fmt.Sprintf(" %s ",a[i].String())
-	}
-	b+="}"
-	return b
-}
-
 func (ss SimpleString) Serialize() []byte {
-	return bytes.Join([][]byte{{STRING}, ss, CRLF}, nil)
+	return []byte(fmt.Sprintf("%c%s%s",STRING,ss,CRLF))
 }
 
 func (se SimpleError) Serialize() []byte {
-	return bytes.Join([][]byte{{ERROR}, se, CRLF}, nil)
-
+	return []byte(fmt.Sprintf("%c%s%s",ERROR,se,CRLF))	
 }
 func (i Integer) Serialize() []byte {
-	return bytes.Join([][]byte{{INTEGER}, i, CRLF}, nil)
+	return []byte(fmt.Sprintf("%c%s%s",INTEGER,i,CRLF))
 }
 
 func (bs BulkString) Serialize() []byte {
 	if len(bs)==0{
 		return bs.SerializeNull()
 	}
-	return bytes.Join([][]byte{[]byte(fmt.Sprintf("%c%v", BULK, len(bs))), append(bs, CRLF...)}, []byte("\r\n"))
+	return []byte(fmt.Sprintf("%c%v%s%s%s",BULK,len(bs),CRLF,bs,CRLF))
 }
 
 func (bs BulkString) SerializeNull()[]byte{
@@ -83,11 +55,11 @@ func (a RespArray) Serialize() []byte {
 }
 
 
-func ConstructRespArray(options []string)string{
-	arr := fmt.Sprintf("*%d\r\n",len(options))
+func ConstructRespArray(options []string)[]byte{
+	arr := make(RespArray,0,len(options))
 	for _, v := range options {
-		arr += fmt.Sprintf("$%d\r\n%s\r\n",len(v),v)
+		arr = append(arr, BulkString(v))
 	}
-	return arr
+	return arr.Serialize()
 
 }
