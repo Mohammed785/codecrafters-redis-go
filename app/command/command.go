@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -110,7 +111,11 @@ func (c *Command) Execute(conn net.Conn, app *config.App) {
 	case "replconf":
 		conn.Write(resp.SimpleString([]byte("OK")).Serialize())
 	case "psync":
-		conn.Write(resp.SimpleString([]byte(fmt.Sprintf("FULLRESYNC %s 0",app.Params.MasterReplId))).Serialize())
+		conn.Write(resp.SimpleString([]byte(fmt.Sprintf("FULLRESYNC %s 0", app.Params.MasterReplId))).Serialize())
+		err:=app.FullResynchronization(conn)
+		if err!=nil{
+			log.Fatalln("couldn't perform full resynchronization with %s",conn.RemoteAddr())
+		}
 	}
 
 }
