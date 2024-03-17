@@ -22,10 +22,8 @@ func handleConnection(conn net.Conn, app *config.App) {
 		if err != nil {
 			if err == io.EOF {
 				log.Printf("connection %v closed", conn.RemoteAddr())
-			} else {
-				log.Println("Error reading from connection ", err.Error())
+				return
 			}
-			return
 		}
 		parser.SetStream(data[:n])
 		parsed, err := parser.Parse()
@@ -36,7 +34,7 @@ func handleConnection(conn net.Conn, app *config.App) {
 		if len(parsed) == 0 {
 			continue
 		}
-		cmd, err := command.NewCommandFromArray(parsed,conn,app)
+		cmd, err := command.NewCommandFromArray(parsed, conn, app)
 		if err != nil {
 			conn.Write(resp.SimpleError(err.Error()).Serialize())
 			continue
@@ -50,10 +48,11 @@ func SendHandshake(app *config.App) {
 	if err != nil {
 		log.Fatalln("couldn't connect to master at ", address)
 	}
+	app.MasterConn = m
 	m.Write(resp.ConstructRespArray([]string{"ping"}))
-	m.Write(resp.ConstructRespArray([]string{"REPLCONF","listening-port",app.Params.Port}))
-	m.Write(resp.ConstructRespArray([]string{"REPLCONF","capa","psync2"}))
-	m.Write(resp.ConstructRespArray([]string{"PSYNC","?","-1"}))
+	m.Write(resp.ConstructRespArray([]string{"REPLCONF", "listening-port", app.Params.Port}))
+	m.Write(resp.ConstructRespArray([]string{"REPLCONF", "capa", "psync2"}))
+	m.Write(resp.ConstructRespArray([]string{"PSYNC", "?", "-1"}))
 }
 
 func main() {
@@ -64,12 +63,6 @@ func main() {
 	flag.StringVar(&app.Params.Port, "port", "6379", "tcp server port number")
 	flag.StringVar(&replicaof, "replicaof", "", "run the instance in slave mode")
 	flag.Parse()
-	if replicaof != "" {
-		app.Params.Role = "slave"
-		app.Params.MasterHost = replicaof
-		app.Params.MasterPort = flag.Arg(0)
-		SendHandshake(app)
-	}
 
 	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%v", app.Params.Port))
 	if err != nil {
@@ -77,6 +70,13 @@ func main() {
 	}
 	defer l.Close()
 	app.DB = storage.NewStorage()
+	if replicaof != "" {
+		app.Params.Role = "slave"
+		app.Params.MasterHost = replicaof
+		app.Params.MasterPort = flag.Arg(0)
+		SendHandshake(app)
+	}
+
 	for {
 		conn, err := l.Accept()
 		if err != nil {

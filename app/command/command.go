@@ -88,10 +88,10 @@ func NewCommandFromArray(arr []resp.BulkString, conn net.Conn, app *config.App) 
 	}
 	return cmd, nil
 }
-func (c *Command) toArray()[]string{
-	arr:=append([]string{c.Name},c.Options...) 
-	for k,v:=range c.Args{
-		arr = append(arr, k,v)
+func (c *Command) toArray() []string {
+	arr := append([]string{c.Name}, c.Options...)
+	for k, v := range c.Args {
+		arr = append(arr, k, v)
 	}
 	return arr
 }
@@ -111,6 +111,11 @@ func (c *Command) Execute() {
 		c.replconf()
 	case "psync":
 		c.psync()
+
+		// err:=c.app.PropagateWriteBufferTo(c.conn.RemoteAddr().String())
+		// if err!=nil{
+		// 	log.Println(err.Error())
+		// }
 	}
 }
 
@@ -139,6 +144,7 @@ func (c *Command) set() {
 	res := c.app.DB.Set(c.Options[0], c.Options[1], c.Args)
 	c.app.AppendToWriteBuffer(resp.ConstructRespArray(c.toArray()))
 	c.conn.Write(res)
+	c.app.PropagateWriteBufferToAll(true)
 }
 
 func (c *Command) info() {
@@ -155,4 +161,6 @@ func (c *Command) psync() {
 	if err != nil {
 		log.Fatalln("couldn't perform full resynchronization with: ", c.conn.RemoteAddr())
 	}
+	c.app.AddReplica(c.conn)
+	c.app.PropagateWriteBufferTo(c.conn.RemoteAddr().String(), false)
 }
