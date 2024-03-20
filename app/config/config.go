@@ -2,13 +2,21 @@ package config
 
 import (
 	"encoding/hex"
+	"flag"
 	"fmt"
-	"net"
 
 	"github.com/codecrafters-io/redis-starter-go/app/storage"
+
+	"net"
+	"sync"
 )
 
-type Params struct {
+const (
+	RoleMaster = "master"
+	RoleSlave  = "slave"
+)
+
+type Configs struct {
 	Port             string
 	Role             string
 	MasterReplId     string
@@ -17,57 +25,43 @@ type Params struct {
 	MasterPort       string
 }
 
-func (p Params) Replication() string {
-	return fmt.Sprintf("# Replication\nrole:%s\nmaster_replid:%s\nmaster_repl_offset:%d", p.Role, p.MasterReplId, p.MasterReplOffset)
+func (c Configs) Replication() string {
+	return fmt.Sprintf("# Replication\nrole:%s\nmaster_replid:%s\nmaster_repl_offset:%d", c.Role, c.MasterReplId, c.MasterReplOffset)
 }
 
-type replica struct {
-	conn net.Conn
-}
-
-func (r replica) Write(b []byte) (int, error) {
-	return r.conn.Write(b)
+func NewConfig() Configs {
+	cfg := Configs{Role: RoleMaster, MasterReplOffset: 0, MasterReplId: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"}
+	flag.StringVar(&cfg.Port, "port", "6379", "tcp server port number")
+	flag.StringVar(&cfg.MasterHost, "replicaof", "", "run the instance in slave mode")
+	flag.Parse()
+	if cfg.MasterHost != "" {
+		cfg.Role = RoleSlave
+		cfg.MasterPort = flag.Arg(0)
+	}
+	return cfg
 }
 
 type App struct {
-	Params      Params
-	DB          *storage.Storage
-	MasterConn  net.Conn
-	replicas    map[string]replica
-	writeBuffer [][]byte
+	Configs    Configs
+	DB         *storage.Storage
+	Replicas   []net.Conn
+	WriteQueue chan []byte
+	mu         sync.Mutex
+}
+
+func NewApp() *App {
+	cfg := NewConfig()
+	return &App{
+		Configs:    cfg,
+		WriteQueue: make(chan []byte, 50),
+		mu:         sync.Mutex{},
+	}
 }
 
 func (a *App) AddReplica(conn net.Conn) {
-	if a.replicas==nil{
-		a.replicas = make(map[string]replica)
-	}
-	a.replicas[conn.RemoteAddr().String()] = replica{conn: conn}
-}
-
-func (a *App) AppendToWriteBuffer(writeCmd []byte) {
-	a.writeBuffer = append(a.writeBuffer, writeCmd)
-}
-
-func (a *App) PropagateWriteBufferToAll(lastOnly bool) error {
-	for k := range a.replicas {
-		a.PropagateWriteBufferTo(k,lastOnly)
-	}
-	return nil
-}
-
-func (a *App) PropagateWriteBufferTo(address string,lastOnly bool) error {
-	replica, ok := a.replicas[address]
-	if !ok {
-		return fmt.Errorf("couldn't propagate writes to replica at address %s", address)
-	}
-	if lastOnly{
-		replica.Write(a.writeBuffer[len(a.writeBuffer)-1])
-	}else{
-		for _, cmd := range a.writeBuffer {
-			replica.Write(cmd)
-		}
-	}
-	return nil
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.Replicas = append(a.Replicas, conn)
 }
 
 func (a *App) FullResynchronization(conn net.Conn) error {

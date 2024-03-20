@@ -1,11 +1,10 @@
 package main
 
 import (
-	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net"
+	"sync"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/config"
@@ -16,14 +15,12 @@ import (
 func handleConnection(conn net.Conn, app *config.App) {
 	parser := new(resp.RESPParser)
 	defer conn.Close()
-	data := make([]byte, 2048)
+	data := make([]byte, 4096)
 	for {
 		n, err := conn.Read(data)
 		if err != nil {
-			if err == io.EOF {
-				log.Printf("connection %v closed", conn.RemoteAddr())
-				return
-			}
+			log.Printf("connection %v closed %s\n", conn.RemoteAddr(), err.Error())
+			break
 		}
 		parser.SetStream(data[:n])
 		parsed, err := parser.Parse()
@@ -42,39 +39,78 @@ func handleConnection(conn net.Conn, app *config.App) {
 		cmd.Execute()
 	}
 }
-func SendHandshake(app *config.App) {
-	address := fmt.Sprintf("%s:%s", app.Params.MasterHost, app.Params.MasterPort)
+
+func ConnectToMaster(app *config.App) {
+	address := fmt.Sprintf("%s:%s", app.Configs.MasterHost, app.Configs.MasterPort)
 	m, err := net.Dial("tcp", address)
 	if err != nil {
 		log.Fatalln("couldn't connect to master at ", address)
 	}
-	app.MasterConn = m
+	defer m.Close()
+	data := make([]byte, 2048)
 	m.Write(resp.ConstructRespArray([]string{"ping"}))
-	m.Write(resp.ConstructRespArray([]string{"REPLCONF", "listening-port", app.Params.Port}))
+	m.Read(data)
+	m.Write(resp.ConstructRespArray([]string{"REPLCONF", "listening-port", app.Configs.Port}))
+	m.Read(data)
 	m.Write(resp.ConstructRespArray([]string{"REPLCONF", "capa", "psync2"}))
+	m.Read(data)
 	m.Write(resp.ConstructRespArray([]string{"PSYNC", "?", "-1"}))
+	m.Read(data)
+	
+	parser := new(resp.RESPParser)
+	for {
+		n, err := m.Read(data)
+		if err != nil {
+			fmt.Println("master connection closed")
+			break
+		}
+		parser.SetStream(data[:n])
+		parsed, err := parser.Parse()
+		if err != nil {
+			m.Write(resp.SimpleError(err.Error()).Serialize())
+			continue
+		}
+		if len(parsed) == 0 {
+			continue
+		}
+		cmd, err := command.NewCommandFromArray(parsed, m, app)
+		if err != nil {
+			m.Write(resp.SimpleError(err.Error()).Serialize())
+			continue
+		}
+		cmd.Execute()
+	}
+}
+
+func HandleReplicaWrites(app *config.App) {
+	var wg sync.WaitGroup
+	for cmd := range app.WriteQueue {
+		log.Println("Replica count: ", len(app.Replicas))
+		for _, replica := range app.Replicas {
+			wg.Add(1)
+			go func(replica net.Conn, cmd []byte) {
+				defer wg.Done()
+				replica.Write(cmd)
+				fmt.Println("Writing to replica ", replica.RemoteAddr())
+			}(replica, cmd)
+		}
+		wg.Wait()
+	}
 }
 
 func main() {
-	app := &config.App{
-		Params: config.Params{Role: "master", MasterReplOffset: 0, MasterReplId: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"},
-	}
-	var replicaof string
-	flag.StringVar(&app.Params.Port, "port", "6379", "tcp server port number")
-	flag.StringVar(&replicaof, "replicaof", "", "run the instance in slave mode")
-	flag.Parse()
+	app := config.NewApp()
 
-	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%v", app.Params.Port))
+	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%v", app.Configs.Port))
 	if err != nil {
-		log.Fatalln("Failed to bind to port ", app.Params.Port)
+		log.Fatalln("Failed to bind to port ", app.Configs.Port)
 	}
 	defer l.Close()
 	app.DB = storage.NewStorage()
-	if replicaof != "" {
-		app.Params.Role = "slave"
-		app.Params.MasterHost = replicaof
-		app.Params.MasterPort = flag.Arg(0)
-		SendHandshake(app)
+	if app.Configs.Role == config.RoleSlave {
+		go ConnectToMaster(app)
+	} else {
+		go HandleReplicaWrites(app)
 	}
 
 	for {
