@@ -56,7 +56,7 @@ func ConnectToMaster(app *config.App) {
 	m.Read(data)
 	m.Write(resp.ConstructRespArray([]string{"PSYNC", "?", "-1"}))
 	m.Read(data)
-	
+
 	parser := new(resp.RESPParser)
 	for {
 		n, err := m.Read(data)
@@ -85,13 +85,11 @@ func ConnectToMaster(app *config.App) {
 func HandleReplicaWrites(app *config.App) {
 	var wg sync.WaitGroup
 	for cmd := range app.WriteQueue {
-		log.Println("Replica count: ", len(app.Replicas))
 		for _, replica := range app.Replicas {
 			wg.Add(1)
 			go func(replica net.Conn, cmd []byte) {
 				defer wg.Done()
 				replica.Write(cmd)
-				fmt.Println("Writing to replica ", replica.RemoteAddr())
 			}(replica, cmd)
 		}
 		wg.Wait()
